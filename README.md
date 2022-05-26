@@ -2,7 +2,12 @@
 
 ## Bycatch estimation tool
 
-These R files run a generic bycatch estimation tool. See the User Guide (UserGuide.pdf or UserGuide.Rmd) for details. The .r files are:
+This is an archive of the files used to develop the bycatch estimator. The tool is now available as an R package. Please go to 
+https://ebabcock.github.io/BycatchEstimator/
+
+to access the current R package. 
+
+Files on this page may not be up to date. 
 
 1.BycatchModelSpecification.r
 
