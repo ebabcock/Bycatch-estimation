@@ -29,7 +29,7 @@ ratio.func= function(x,y,g,X,N,G) {
 }
 
 
-# Statified mean estimator. y and g are observed values of the variable and 
+# Stratified mean estimator. y and g are observed values of the variable and 
 # associated stratum identifier. N is the total sample size in each stratum (Cochran)
 stratified.func=function(y,g,N) {
   ymean=tapply(y,g,mean)
@@ -419,10 +419,13 @@ findBestModelFunc<-function(obsdatval,modType,printOutput=FALSE) {
 #Function to predict CPUE without variances to get predictions quickly for cross validation
 makePredictions<-function(modfit1,modfit2=NULL,modType,newdat,obsdatval=NULL) {
   if(!is.null(modfit1)) {
-    predval1<-try(data.frame(predict(modfit1,newdata=newdat,se.fit=TRUE,type="response")))
+    getse<-ifelse(modType %in% c("Lognormal","Delta-Lognormal"),TRUE,FALSE)
+    predval1<-try(data.frame(predict(modfit1,newdata=newdat,se.fit=getse,type="response")))
+    if(dim(predval1)[2]==1) names(predval1)[1]<-"fit"   
     if(class(predval1)[[1]]!="try-error") {
      if(!is.null(modfit2))  {
-      predval2<-data.frame(predict(modfit2,newdata=newdat,se.fit=TRUE,type="response"))
+      predval2<-data.frame(predict(modfit2,newdata=newdat,se.fit=getse,type="response"))
+      if(dim(predval2)[2]==1) names(predval2)[1]<-"fit"   
       names(predval2)=paste0(names(predval2),"2")
      }
      if(modType=="Delta-Lognormal") {
@@ -631,15 +634,13 @@ if(!any(is.na(response1$se.fit)) & !max(response1$se.fit/response1$fit,na.rm=TRU
   }
     if(includeObsCatch & modtype!="Binomial") { 
       d=match(allpred$matchColumn,obsdatval$matchColumn)
-      d=d[!is.na(d)]
-      allpred$Total[d]= allpred$Total[d] + obsdatval$Catch
-      sim[d,]= sim[d,] + obsdatval$Catch
+      allpred$Total[!is.na(d)]= allpred$Total[!is.na(d)] + obsdatval$Catch[d[!is.na(d)]]
+      sim[!is.na(d),]= sim[!is.na(d),] + obsdatval$Catch[d[!is.na(d)]]
     }
     if(includeObsCatch & modtype=="Binomial") { 
       d=match(allpred$matchColumn,obsdatval$matchColumn)
-      d=d[!is.na(d)]
-      allpred$Total[d]= obsdatval$pres
-      sim[d,]= obsdatval$pres
+      allpred$Total[!is.na(d)]= obsdatval$pres[d[!is.na(d)]]
+      sim[!is.na(d),]= obsdatval$presd[!is.na(d)]
     }
   stratatotal<-allpred %>%
       group_by_at(all_of(requiredVarNames)) %>%
@@ -814,16 +815,14 @@ makePredictionsSimVarBig<-function(modfit1,modfit2=NULL,newdat, modtype,  nsim=n
     if(includeObsCatch & modtype!="Binomial") { 
       obsdatvalyear=obsdatval[obsdatval$Year==years[i],]
       d=match(allpred$matchColumn,obsdatvalyear$matchColumn)
-      d=d[!is.na(d)]
-      allpred$Total[d]= allpred$Total[d] + obsdatvalyear$Catch
-      sim[d,]= sim[d,] + obsdatvalyear$Catch
+      allpred$Total[!is.na(d)]= allpred$Total[!is.na(d)] + obsdatvalyear$Catch[d[!is.na(d)]]
+      sim[!is.na(d),]= sim[!is.na(d),] + obsdatvalyear$Catch[d[!is.na(d)]]
     }
     if(includeObsCatch & modtype=="Binomial") { 
       obsdatvalyear=obsdatval[obsdatval$Year==years[i],]
       d=match(allpred$matchColumn,obsdatvalyear$matchColumn)
-      d=d[!is.na(d)]
-      allpred$Total[d]= obsdatvalyear$pres
-      sim[d,]= obsdatvalyear$pres
+      allpred$Total[!is.na(d)]= obsdatvalyear$pres[d[!is.na(d)]]
+      sim[!is.na(d),]= obsdatvalyear$pres[d[!is.na(d)]]
     }
   stratatotal<-allpred %>%
       group_by_at(all_of(requiredVarNames)) %>%
@@ -1291,15 +1290,13 @@ makePredictionsDeltaVar<-function(modfit1,newdat, modtype,  printOutput=TRUE,obs
   }
     if(includeObsCatch & modtype!="Binomial") { 
       obsdatvalyear=obsdatval[obsdatval$Year==years[i],]
-      d=match(allpred$matchColumn,obsdatvalyear$matchColumn)
-      d=a[!is.na(d)]
-      allpred$Total[a]= allpred$Total[d] + obsdatvalyear$Catch
+      d=match(newdat$matchColumn,obsdatvalyear$matchColumn)
+      predval[!is.na(d)]= predval[!is.na(d)] + obsdatvalyear$Catch[d[!is.na(d)]]
     }
     if(includeObsCatch & modtype=="Binomial") { 
       obsdatvalyear=obsdatval[obsdatval$Year==years[i],]
-      d=match(allpred$matchColumn,obsdatvalyear$matchColumn)
-      d=d[!is.na(d)]
-      allpred$Total[d]= obsdatvalyear$pres
+      d=match(newdat$matchColumn,obsdatvalyear$matchColumn)
+      predval[!is.na(d)]= obsdatvalyear$pres[d[!is.na(d)]]
     }
   yearpred$Total[i]<-sum(predval)
   yearpred$TotalVar[i] = t(deriv) %*%
@@ -1347,17 +1344,14 @@ makePredictionsNoVar<-function(modfit1,modfit2=NULL,modtype,newdat,obsdatval=NUL
   if(includeObsCatch)    newdat$Effort=newdat$unsampledEffort/newdat$SampleUnits else
     newdat$Effort=newdat$Effort/newdat$SampleUnits
   newdat=uncount(newdat,SampleUnits)
+  getse=ifelse(modtype %in% c("Lognormal","Delta-Lognormal"),TRUE,FALSE)
   nObs=dim(newdat)[1]
   if(!is.null(modfit1)) {
-    response1<-data.frame(predict(modfit1,newdata=newdat,type="response",se.fit=TRUE))
-    if(dim(response1)[2]==1) {
-      names(response1)="fit"
-      if(modtype=="Tweedie")
-        response1$se.fit=getSimSE(modfit1, newdat, transFunc="exp",offsetval=NULL, nsim=nSims) else
-          response1$se.fit=rep(NA,dim(response1)[2])
-    }
+    response1<-data.frame(predict(modfit1,newdata=newdat,type="response",se.fit=getse))
+    if(dim(response1)[2]==1)     names(response1)="fit"
     if(!is.null(modfit2))  {
-      response2<-data.frame(predict(modfit2,newdata=newdat,se.fit=TRUE,type="response"))
+      response2<-data.frame(predict(modfit2,newdata=newdat,se.fit=getse,type="response"))
+      if(dim(response2)[2]==1) names(response2)[1]<-"fit"   
       names(response2)=paste0(names(response2),"2")
     }
     if(modtype== "Binomial") {
@@ -1406,14 +1400,12 @@ makePredictionsNoVar<-function(modfit1,modfit2=NULL,modtype,newdat,obsdatval=NUL
         mutate(Total=Effort*fit)
     }
     if(includeObsCatch & modtype!="Binomial") { 
-       a=match(allpred$matchColumn,obsdatval$matchColumn)
-      a=a[!is.na(a)]
-      allpred$Total[a]= allpred$Total[a] + obsdatval$Catch
+      a=match(allpred$matchColumn,obsdatval$matchColumn)
+      allpred$Total[!is.na(a)]= allpred$Total[!is.na(a)] + obsdatval$Catch[a[!is.na(a)]]
     }
     if(includeObsCatch & modtype=="Binomial") { 
       a=match(allpred$matchColumn,obsdatval$matchColumn)
-      a=a[!is.na(a)]
-      allpred$Total[a]= obsdatval$pres
+      allpred$Total[!is.na(a)]= obsdatval$pres[a[!is.na(a)]]
     }
     stratapred<-allpred %>%
       group_by_at(all_of(requiredVarNames)) %>%
@@ -1435,3 +1427,42 @@ makePredictionsNoVar<-function(modfit1,modfit2=NULL,modtype,newdat,obsdatval=NUL
   returnval
 }
 
+#Function to make data summarizes including ratio estimate at 
+#stratification defined by strataVars
+MakeSummary<-function(obsdatval,logdatval,strataVars) {
+  x<-obsdatval %>%       
+    group_by_at(all_of(strataVars))  %>%
+    summarize(OCat=sum(Catch,na.rm=TRUE),
+              OEff=sum(Effort,na.rm=TRUE),
+              OUnit=length(Year),
+              CPUE=mean(cpue,na.rm=TRUE),
+              CPse=standard.error(cpue),
+              Out=outlierCountFunc(cpue),
+              Pos=sum(pres,na.rm=TRUE),
+              OCatS=sd(Catch,na.rm=TRUE),
+              OEffS=sd(Effort,na.rm=TRUE),
+              Cov=cov(Catch,Effort)) %>%
+    mutate(PFrac=Pos/OUnit)
+  if(EstimateBycatch) {
+   returnval<-logdatval  %>% 
+    group_by_at(all_of(strataVars)) %>%
+    summarize(Eff=sum(Effort,na.rm=TRUE),Units=sum(SampleUnits))
+   returnval<-left_join(returnval,x,by=strataVars)  %>%
+     mutate(OEff=ifelse(is.na(OEff),0,OEff),OUnit=ifelse(is.na(OUnit),0,OUnit))%>%
+     mutate(EFrac=OEff/Eff, UFrac=OUnit/Units) %>%
+     mutate(Cat=(OCat/OEff)*Eff,
+       Cse=sqrt(ratioVar(OEff,Eff,OUnit,Units,OCat/OEff,OEffS^2,OCatS^2,Cov))) %>%
+    ungroup() %>% mutate(Year=as.numeric(as.character(Year))) %>%
+     mutate(Year=ifelse(Year<startYear,Year+startYear,Year))
+  }
+  returnval
+}
+
+#Calculate variance of ratio estimator, from data already summarized by strata
+#Variables are x=sum(obs Effort),X=sum(log Effort), n=observed sample units
+#N=log sample units, Rhat=mean(obs Catch)/mean(obs Effort), sx2, sy2, and sxy
+#are the observed variance in effort and catch, and covariance
+ratioVar<-function(x,X,n,N,Rhat,sx2,sy2,sxy) {
+    X^2*(1-n/N)/(x^2/n)*(sy2+Rhat^2*sx2-2*Rhat*sxy)
+}
+  

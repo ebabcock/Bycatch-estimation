@@ -121,15 +121,14 @@ modelFail<-matrix("-",numSp,length(modelTry),dimnames=list(common,modelTry))
 rmsetab<-list()
 metab<-list()
 residualTab<-list()
+yearSum<-list()
+strataSum<-list()
 
 #Make lists to keep output, which will also be output as .pdf and .csv files for use in reports.
 dirname<-list()
 dat<-list()
 #Loop through all species and print data summary. Note that records with NA in either catch or effort are excluded automatically
-yearSum<-list()
-cl2<-makeCluster(NumCores-2)
-registerDoParallel(cl2)
-foreach(run= 1:numSp) %do%  {
+for(run in 1:numSp) {
   dirname[[run]]<-paste0(outDir,"/",common[run]," ",catchType[run],"/")
   if(!dir.exists(dirname[[run]])) dir.create(dirname[[run]])
   if(includeObsCatch) tempvars<-c(allVarNames,"Effort","Catch","matchColumn") else
@@ -143,30 +142,14 @@ foreach(run= 1:numSp) %do%  {
            log.cpue=log(Catch/Effort),
            pres=ifelse(cpue>0,1,0)) 
   if(dim(dat[[run]])[1]<dim(obsdat)[1]) print(paste0("Removed ",dim(obsdat)[1]-dim(dat[[run]])[1]," rows with NA values for ",common[run]))
-  yearSum[[run]]<-dat[[run]] %>% group_by(Year) %>%
-    summarize(OCat=sum(Catch,na.rm=TRUE),
-              OEff=sum(Effort,na.rm=TRUE),
-              OUnit=length(Year),
-              CPUE=mean(cpue,na.rm=TRUE),
-              CPse=standard.error(cpue),
-              Out=outlierCountFunc(cpue),
-              Pos=sum(pres,na.rm=TRUE)) %>%
-    mutate(PFrac=Pos/OUnit)
-  if(EstimateBycatch) {
-   x<-logdat  %>% group_by(Year) %>%
-    summarize(Eff=sum(Effort,na.rm=TRUE),Units=sum(SampleUnits)) 
-   yearSum[[run]]<-merge(yearSum[[run]],x) %>% mutate(EFrac=OEff/Eff,
-                                                     UFrac=OUnit/Units)
-   logyear<-logdat %>% group_by(Year) %>% summarize(Effort=sum(Effort,na.rm=TRUE))
-   x=ratio.func(dat[[run]]$Effort,dat[[run]]$Catch,dat[[run]]$Year,
-               logyear$Effort,logyear$Effort,logyear$Year)
-   yearSum[[run]]<-cbind(yearSum[[run]],Cat=x$stratum.est,Cse=x$stratum.se) %>% 
-    ungroup() %>% mutate(Year=as.numeric(as.character(Year))) %>%
-     mutate(Year=ifelse(Year<startYear,Year+startYear,Year)) 
-  } 
-  write.csv(yearSum[[run]],paste0(dirname[[run]],common[run],catchType[run],"DataSummary.csv"))
+  yearSum[[run]]<-MakeSummary(dat[[run]],logdat,"Year")
+  write.csv(dplyr::select(yearSum[[run]],c("Year","OCat","OEff","OUnit","CPUE","CPse","Out","Pos","PFrac","Eff","Units","EFrac","UFrac","Cat","Cse")),
+    paste0(dirname[[run]],common[run],catchType[run],"DataSummary.csv"))
+  strataSum[[run]]<-MakeSummary(dat[[run]],logdat,requiredVarNames)
+  write.csv(strataSum[[run]],
+    paste0(dirname[[run]],common[run],catchType[run],"StrataSummary.csv"))
 }
-stopCluster(cl2)
+
 save(list=c("numSp","yearSum","runName", "common", "sp"),file=paste0(outDir,"\\","sumdatR"))
 rmarkdown::render("5.PrintDataSummary.rmd",
   params=list(OutDir=OutDir),

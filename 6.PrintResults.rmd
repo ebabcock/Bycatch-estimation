@@ -16,7 +16,8 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 ```{r load data,  results=FALSE}
 ##remove this line except when testing the .rmd file
-# outVal<-"C:/Users/ebabcock/Box Sync/bycatch project (ebabcock@miami.edu)/Current R code/outputLLSIMBUMtripOctobs75/Blue marlin catch/"
+# outVal<-"C:/Users/ebabcock/Box Sync/bycatch project (ebabcock@miami.edu)/Current R #code/outputLoggerheadLLSimVar/Loggerhead all"
+#outVal<-"C:/Users/ebabcock/Box Sync/bycatch project (ebabcock@miami.edu)/Current R code/outputLoggerheadVLSimVar/Loggerhead all"
 ## remove
 load(paste0(outVal,"/","resultsR"))
 library(tidyverse)
@@ -60,7 +61,7 @@ cat("Table ",tablenum,". Formula of ",selectCriteria," best model, along whether
 tablenum<-tablenum+1
 df1<-modelTable[[run]] %>% 
   mutate(Failure=modelFail[run,]) %>%
-   mutate_if(is.numeric,round,2)
+   mutate_if(is.numeric,round,5)
 if(!DoCrossValidation) df1<-dplyr::select(df1,-c("RMSE","ME"))
 kbl(df1,format="latex") %>%
    kable_styling(
@@ -81,17 +82,21 @@ if(EstimateBycatch ) {
 cat("\n Figure ",fignum,". Total bycatch estimates for all valid models, including a simple unstratified ratio estimator, for ",common[run],varText,obsText,". \n",sep="")
   fignum<-fignum+1
 }
-if(EstimateIndex & any(allindex[[run]]$Valid==1)) {
- plotIndex(filter(allindex[[run]],Valid==1),"All",NULL)
- cat("\n Figure ",fignum,". Abundance indices from all valid models for ",common[run],", plus and minus one standard error. \n",sep="")
- fignum<-fignum+1
-} 
+if(EstimateIndex) {
+ if(any(allindex[[run]]$Valid==1))  {
+  plotIndex(filter(allindex[[run]],Valid==1),"All",NULL)
+  cat("\n Figure ",fignum,". Abundance indices from all valid models for ",common[run],", plus and minus one standard error. \n",sep="")
+  fignum<-fignum+1
+} }
 #Show cross validation figures
 if(DoCrossValidation &!all(is.na(modelTable[[run]]$RMSE))) {
  plotCrossVal(rmsetab[[run]],metab[[run]],NULL)
  cat("\n Figure ",fignum,". Boxplots of Root Mean Square Error and Mean Error, across 10 cross- validation folds for ",common[run],". Lowest RMSE model is ",bestmod[run],".\n",sep="")
  fignum<-fignum+1
 }
+```
+
+```{r models, results="asis",fig.align="left", fig.height=4}
 #Print for each model type
 for(mod in 1:length(modelTry)) {
 if(modelFail[run,mod]=="-") {

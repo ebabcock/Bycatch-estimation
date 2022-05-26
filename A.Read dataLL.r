@@ -148,7 +148,7 @@ spyearsum[is.na(spyearsum)]<-0
 names(spyearsum)[-1]<-paste0("catch.",names(spyearsum)[-1])  
 logyearsum<-merge(logyearsum,spyearsum)
 logyearsum
-write.csv(logyearsum,"ReefLLkept.csv")
+#write.csv(logyearsum,"ReefLLkept.csv")
 
 #Summary of log data by stratum
 logyearstratsum<-logtripll %>% 
@@ -157,13 +157,15 @@ logyearstratsum<-logtripll %>%
 logyearstratsum
 
 
-# Make data by set to include depth as a variable
+# Make data by set to include depth, latitude and longitude as variables
 
 obsllset<-obsll %>% group_by(TRIPNUMBER,SETNUMBER) %>% 
   summarize(Year=max(YEAR_LANDED,na.rm=TRUE),
             area=as.numeric(mostfreqfunc(STATZONE)),
             month=max(MONTH_LANDED,na.rm=TRUE),
-            depth=mean(FISHINGDEPTH_M)) %>%
+            depth=mean(FISHINGDEPTH_M),
+            latitude=mean(LATITUDE_BEGIN_SET,na.rm=TRUE),
+            longitude=mean(LONGITUDE_BEGIN_SET,na.rm=TRUE)) %>%
   mutate(season=ifelse(month<=6,"1","2"),
          EW=ifelse(area>=11,"W","E"),
          depth=ifelse(is.na(depth),median(depth,na.rm=TRUE),depth),
@@ -171,9 +173,6 @@ obsllset<-obsll %>% group_by(TRIPNUMBER,SETNUMBER) %>%
 dim(obsllset)
 summary(obsllset)
 #Add selected catch type as column to set summary (should be same as above)
-catchtype<-"kept.kg"
-#catchtype<-"discard.dead.num"
-#catchtype<-"all.encountered.num"
 if(catchtype=="kept.kg") {
   catch<-obsll %>% group_by(TRIPNUMBER,SETNUMBER,SpeciesSelect) %>% 
     summarize(catch=sum(whole_kg[FATE %in% c("KEPT","KEPT AS BAIT")],na.rm=TRUE)) 
@@ -182,7 +181,7 @@ if(catchtype=="discard.dead.num") {
   catch<-obsll %>% group_by(TRIPNUMBER,SETNUMBER,SpeciesSelect) %>% 
     summarize(catch=length(whole_kg[FATE %in% c("RELEASED DEAD","RELEASED UNKNOWN")])) 
 }
-if(catchtype=="all.encountered.num") {
+if(catchtype=="all.num") {
   catch<-obsll %>% group_by(TRIPNUMBER,SETNUMBER,SpeciesSelect) %>% 
     summarize(catch=length(whole_kg)) 
 }
@@ -196,6 +195,8 @@ summary(obsllset)
 dim(obsllset)
 sum(obslltrip$sampled.sets)
 names(obsllset)
+
+write.csv(obsllset,"obsllsetshark.csv")
 
 
 # Add column to match logbook to observer data
@@ -216,9 +217,49 @@ for(i in 1:nrow(obslltripmatch)) {
 }
 ggplot(filter(logtripll,!is.na(SampledEffort)),aes(y=SampledEffort,x=sets))+
   geom_point()+geom_abline(intercept=0,slope=1) + xlab("Logbook effort")+ ylab("Observed effort")+
-  ggtitle("Observed and logbook number of hooks, same trips")
+  ggtitle("Observed and logbook number of sets, same trips")
 table(logtripll$SampledEffort>logtripll$sets)
 #87 matched trips have more observer effort than logbook effort. 
 
 
 
+#Turtle data
+setwd("~/Box Sync/bycatch project (ebabcock@miami.edu)/Current R code/Data")
+turtle<-read.csv("All Turtles.csv")
+summary(turtle)
+dim(turtle)
+table(turtle$CapOrSit,turtle$StaOrNot)
+table(turtle$GearType,turtle$Species)
+
+turtle$Date<-as.Date(str_split(turtle$CaptureDate," ",simplify=TRUE)[,1],format="%m/%d/%Y")
+turtle$Year<-format(turtle$Date,format="%Y")
+table(turtle$Year)
+turtle$ObsType<-substring(turtle$TripNumber,1,2)
+table(turtle$ObsType,turtle$CapOrSit)
+
+table(turtle$CapOrSit,turtle$GearType)
+turtlell<-turtle %>%
+ filter(CapOrSit=="CAPTURED" & GearType=="LONGLINE" & ObsType=="GL")
+x<-match(turtlell$TripNumber,obsll$TRIPNUMBER)
+summary(x)
+
+dim(turtlell)
+table(turtlell$CaptureDate,turtlell$Species)
+length(unique(turtlell$TripNumber))
+dim(turtlell)
+
+turtletrip<-turtlell %>% 
+  filter(Species=="LOGGERHEAD") %>%
+  group_by(TripNumber) %>%
+  summarize(Number=n())
+turtletrip
+
+x<-match(obslltrip$TRIPNUMBER,turtletrip$TripNumber)
+table(is.na(x))
+obslltrip$Loggerhead<-turtletrip$Number[match(obslltrip$TRIPNUMBER,turtletrip$TripNumber)]
+obslltrip$Loggerhead[is.na(obslltrip$Loggerhead)]<-0
+sum(obslltrip$Loggerhead)
+sum(turtletrip$Number)
+dim(turtletrip)
+
+head(obslltrip)
